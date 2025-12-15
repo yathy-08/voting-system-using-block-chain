@@ -1,0 +1,172 @@
+{% load static %}
+
+<div class="party-selection">
+
+    <!-- Search Box -->
+    <input class="search-box" placeholder="Search..." type="text" id="search" autocomplete="off">
+
+    <!-- Party List -->
+    <div class="party-list">
+        {% for party in parties %}
+            <div class="option" id="{{ party.party_id }}">
+                <div class="party-logo">
+                    <img style="width: 80px; height: 80px; object-fit: contain;" src="{{ party.party_logo }}" alt="{{ party.party_name }}">
+                </div>
+                <div class="divider"></div>
+                <div class="party-name">{{ party.party_name }}</div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Vote Confirmation Dialog -->
+    <div class="dialog" style="display: none;">
+        <div class="vote-confirmation">
+            <div class="confirm">Confirm your vote?</div>
+            <img class="confirmation-party-logo" src="" alt="Party Logo">
+            <div class="confirmation-party-name"></div>
+            <textarea id="private-key-input" style="margin-top: 20px;" rows="2" placeholder="Private key sent to your email">{{ request.session.private_key }}</textarea>
+            <div class="vote-confirmation-buttons">
+                <a id="final-confirm" class="button">Yes, Vote</a>
+                <a id="cancel-confirm" class="button">No, Cancel</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vote Processing Screen -->
+<div class="all-done" style="display: none;">
+    <div class="front">
+        <div class="selected-party">
+            <img class="voted-party-image" src="{% static 'images/logo.png' %}" alt="Voted Party Logo">
+            <div class="final-message"></div>
+        </div>
+        <img class="loading-img" style="margin-top: 50px;" src="{% static 'images/loading.gif' %}" alt="Loading">
+        <div>Please wait... we are processing your priceless vote!</div>
+    </div>
+</div>
+
+<!-- JS Scripts -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(document).ready(function(){
+
+    // Search filter
+    $("#search").on("keyup", function() {
+        var value = $(this).val().toLowerCase();
+        $(".party-list .option").filter(function() {
+            $(this).toggle($(this).find(".party-name").text().toLowerCase().indexOf(value) > -1)
+        });
+    });
+
+    // Select Party
+    $(".party-list .option").click(function(){
+        var partyLogo = $(this).find("img").attr("src");
+        var partyName = $(this).find(".party-name").text();
+        $(".dialog").show();
+        $(".confirmation-party-logo").attr("src", partyLogo);
+        $(".confirmation-party-name").text(partyName);
+        $(".dialog textarea").val("{{ request.session.private_key }}");  // auto-fill private key
+        $(".dialog").data("party-id", $(this).attr("id"));
+    });
+
+    // Cancel vote
+    $("#cancel-confirm").click(function(){
+        $(".dialog").hide();
+    });
+
+    // Confirm vote
+    $("#final-confirm").click(function(){
+        var privateKey = $("#private-key-input").val();
+        var selectedPartyId = $(".dialog").data("party-id");
+
+        $.ajax({
+            url: "/create-vote/",
+            type: "GET",
+            data: {
+                "private-key": privateKey,
+                "selected-party-id": selectedPartyId
+            },
+            success: function(response){
+                if(response.success){
+                    $(".party-selection").hide();
+                    $(".dialog").hide();
+                    $(".all-done").show();
+                    $(".voted-party-image").attr("src", $(".confirmation-party-logo").attr("src"));
+                    $(".final-message").text("Your vote has been cast successfully!");
+                } else {
+                    alert("Error: " + response.status);
+                }
+            },
+            error: function(){
+                alert("Something went wrong! Please try again.");
+            }
+        });
+    });
+
+});
+</script>
+
+<style>
+.party-selection {
+    width: 80%;
+    margin: auto;
+}
+.party-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-top: 20px;
+}
+.option {
+    border: 1px solid #ccc;
+    padding: 10px;
+    width: 180px;
+    cursor: pointer;
+    text-align: center;
+    border-radius: 8px;
+    transition: transform 0.2s;
+}
+.option:hover { transform: scale(1.05); background: #f9f9f9; }
+.divider { height: 1px; background: #ccc; margin: 5px 0; }
+.vote-confirmation { 
+    background: #fff; 
+    padding: 20px; 
+    border-radius: 10px; 
+    text-align: center; 
+    max-width: 400px; 
+}
+.vote-confirmation img.confirmation-party-logo {
+    width: 150px;      /* limit size */
+    height: 150px;     /* limit size */
+    object-fit: contain;
+    margin-bottom: 10px;
+}
+.vote-confirmation-buttons .button { 
+    margin: 10px; 
+    cursor: pointer; 
+    padding: 5px 10px; 
+    border-radius: 5px; 
+    background: #007BFF; 
+    color: white; 
+    text-decoration: none; 
+}
+.vote-confirmation-buttons .button:hover { background: #0056b3; }
+.dialog { 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    background: rgba(0,0,0,0.5); 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+}
+.all-done { 
+    text-align: center; 
+    margin-top: 50px; 
+}
+.loading-img { 
+    width: 100px; 
+}
+</style>
