@@ -15,25 +15,6 @@ A secure web platform where users can cast votes digitally. Built with **Python 
 
 ---
 
-## 📸 Screenshots
-
-### Home Page / Login
-![Home Page](images/home_page.png)
-
-### Voting Page
-![Voting Page](images/voting_page.png)
-
-### Vote Confirmation
-![Vote Confirmation](images/vote_confirmation.png)
-
-### Show Results
-![Show Results](images/show_results.png)
-
-### Blockchain Verification (Optional)
-![Blockchain Verification](images/blockchain_verification.png)
-
----
-
 ## 🛠️ How to Run
 
 1. Clone the repository:
