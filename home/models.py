@@ -45,3 +45,11 @@ class Block(models.Model):
 class MiningInfo(models.Model):
     prev_hash = models.CharField(max_length=100, blank=True)
     last_block_id = models.CharField(null=True, max_length=10)
+
+class ElectionResult(models.Model):
+    declared = models.BooleanField(default=False)
+    winner_party = models.ForeignKey(
+        PoliticalParty, null=True, blank=True, on_delete=models.SET_NULL
+    )
+    email_sent = models.BooleanField(default=False)
+    declared_at = models.DateTimeField(null=True, blank=True)

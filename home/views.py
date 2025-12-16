@@ -5,7 +5,15 @@ from django.forms.models import model_to_dict
 from django.conf import settings
 from django.utils import timezone
 
-from .models import Voters, PoliticalParty, Vote, VoteBackup, Block, MiningInfo
+from .models import (
+    Voters,
+    PoliticalParty,
+    Vote,
+    VoteBackup,
+    Block,
+    MiningInfo,
+    ElectionResult,
+)
 from .methods_module import verify_vote, vote_count
 
 from Crypto.Hash import SHA3_256
@@ -263,34 +271,83 @@ def dummy_data_input(to_do):
 
 
 def show_result(request):
-    vote_result = vote_count()
-    vote_result = dict(
-        reversed(sorted(vote_result.items(), key=lambda vr: (vr[1], vr[0])))
-    )
-
     results = []
+    winner_party = None
+    tie_parties = []
+
+    vote_result = vote_count()
+
     political_parties = PoliticalParty.objects.all()
-    for i, (party_id, votecount) in enumerate(vote_result.items(), start=1):
+    for i, (party_id, votecount) in enumerate(
+        sorted(vote_result.items(), key=lambda x: (-x[1], x[0])), start=1
+    ):
         party = political_parties.get(party_id=party_id)
-        results.append(
+        results.append({
+            "sr": i,
+            "party_name": party.party_name,
+            "party_symbol": party.party_logo,
+            "vote_count": votecount,
+        })
+
+    if Voters.objects.filter(vote_done=False).exists():
+        return render(
+            request,
+            "show-result.html",
             {
-                "sr": i,
-                "party_name": party.party_name,
-                "party_symbol": party.party_logo,
-                "vote_count": votecount,
-            }
+                "results": results,
+                "status": "Voting is still in progress",
+            },
         )
 
-    winner_party = None
-    if Voters.objects.filter(vote_done=False).count() == 0:
-        winner_id = max(vote_result, key=vote_result.get)
-        winner_party = PoliticalParty.objects.get(party_id=winner_id)
-        send_winner_email(winner_party)  # call directly, no import
+    if Vote.objects.filter(block_id=None).exists():
+        return render(
+            request,
+            "show-result.html",
+            {
+                "results": results,
+                "status": "Votes are not yet mined and verified",
+            },
+        )
+
+    election, _ = ElectionResult.objects.get_or_create(id=1)
+
+    max_votes = max(vote_result.values())
+    top_parties = [pid for pid, v in vote_result.items() if v == max_votes]
+
+    if len(top_parties) > 1:
+        tie_parties = PoliticalParty.objects.filter(party_id__in=top_parties)
+        return render(
+            request,
+            "show-result.html",
+            {
+                "results": results,
+                "tie_parties": tie_parties,
+                "status": "Election resulted in a tie",
+            },
+        )
+
+    winner_party = PoliticalParty.objects.get(party_id=top_parties[0])
+
+    if not election.declared:
+        election.declared = True
+        election.winner_party = winner_party
+        election.declared_at = timezone.now()
+        election.save()
+
+    if not election.email_sent:
+        send_winner_email(winner_party)
+        election.email_sent = True
+        election.save()
 
     return render(
-        request, "show-result.html", {"results": results, "winner_party": winner_party}
+        request,
+        "show-result.html",
+        {
+            "results": results,
+            "winner_party": winner_party,
+            "status": "Election completed successfully",
+        },
     )
-
 
 def send_winner_email(winner_party):
     voters = Voters.objects.all()
@@ -492,3 +549,19 @@ def verify_block(request):
 
 def track_server(request):
     return JsonResponse(ts_data)
+
+
+def reset_election():
+    # Delete votes and blockchain
+    Vote.objects.all().delete()
+    VoteBackup.objects.all().delete()
+    Block.objects.all().delete()
+
+    # Reset voter status
+    Voters.objects.update(vote_done=False)
+
+    # Reset mining info
+    MiningInfo.objects.all().delete()
+    MiningInfo.objects.create(id=0, prev_hash="0" * 64, last_block_id="0")
+
+    print("Election reset completed.")
